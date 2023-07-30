@@ -527,8 +527,6 @@ R_imp <- target_measuresR_long[target_measuresR_long$Dataset %like% "implementat
 #############################################################################
 #############################################################################
 
-
-
 #turn data into long format and rename TM
 target_measuresT_long <- target_measuresT %>%
   pivot_longer(cols = c("Cal_Int", "Cal_Slope", "AUC", "Brier"), names_to = "target_measures", values_to = "estimates") %>%
@@ -558,11 +556,9 @@ T_imp <- target_measuresT_long[target_measuresT_long$Dataset %like% "implementat
 
 
 ####### BIAS CALCULATIONS #########
-
 ### RESECT 
 
 ## MI no Y at implementation 
-
 MInoY_bias_R <- subset(R_imp, Dataset == "MI no Y at implementation") %>%
   rename_at(vars("estimates"), function(x) paste0("true_", x)) %>%
   left_join(R_val, MInoY_bias_R,
@@ -592,13 +588,9 @@ all_bias_R <- MInoY_bias_R %>%
   bind_rows(Mean_Zero_R)
 
 
-
-
-
 ### Thoracoscore
 
 ## MI no Y at implementation 
-
 MInoY_bias_T <- subset(T_imp, Dataset == "MI no Y at implementation") %>%
   rename_at(vars("estimates"), function(x) paste0("true_", x)) %>%
   left_join(T_val, MInoY_bias_T,
@@ -622,26 +614,14 @@ Mean_Zero_T <- subset(T_imp, Dataset == "Mean + Risk Factor Absent at implementa
             by = "target_measures") %>%
   mutate(bias = estimates - true_estimates) 
 
-
 all_bias_T <- MInoY_bias_T %>% 
   bind_rows(MIwithY_bias_T) %>%
   bind_rows(Mean_Zero_T)
 
 
-
-
-
-
-
-
-
 #### plot bias 
- 
 all_bias_R$target_measures <- factor(all_bias_R$target_measures, levels = c("AUC", "Calibration Intercept", "Calibration Slope", "Brier Score"))
-
 all_bias_T$target_measures <- factor(all_bias_T$target_measures, levels = c("AUC", "Calibration Intercept", "Calibration Slope", "Brier Score"))
-
-
 
 plot_R <- ggplot(data = all_bias_R, aes(x = bias, y = Dataset.y, color = factor(target_measures),
                                       shape = factor(target_measures))) +
@@ -678,9 +658,7 @@ plot_R <- plot_R + theme(panel.grid.major = element_line(size = 1.5))
 print(plot_R)
 
 
-
 #####
-
 plot_T <- ggplot(data = all_bias_T, aes(x = bias, y = Dataset.y, color = factor(target_measures),
                                         shape = factor(target_measures))) +
   geom_point(size = 3, stroke = 0.5) +
@@ -715,5 +693,5 @@ plot_T <- plot_T + theme(panel.grid.major = element_line(size = 1.5))
 
 print(plot_T)
 
-
+##
 
