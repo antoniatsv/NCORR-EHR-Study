@@ -18,8 +18,6 @@ library(data.table)
 library(RColorBrewer)
 library(ggh4x)
 
-setwd("~/Desktop/Antonia/Data")
-
 set.seed(123)
 
 # Read SPSS data
@@ -236,31 +234,31 @@ thoracoscore_datasets_LP <- imputed_datasets[grepl("thoracoscore", names(imputed
 for (dataset_name in names(resect_datasets_LP)) {
   datasetR <- resect_datasets_LP[[dataset_name]]
   
-  # Calculate LP
-  LP <- -6.036 +
-    (as.numeric(datasetR$Age) * 0.041) +
-    (as.numeric(datasetR$MaleSex) * 0.493) +
-    (as.numeric(datasetR$ECOG) * 0.183) -
-    (as.numeric(datasetR$DLCOPredicted) * 0.029) -
-    (as.numeric(datasetR$BMI) * 0.056) +
-    (as.numeric(datasetR$CreatinineumolL) * 0.005) +
-    (as.numeric(datasetR$Anaemia) * 0.242) +
-    (as.numeric(datasetR$Arrhythmia) * 0.608) +
-    (as.numeric(datasetR$Right) * 0.379) +
-    (as.numeric(datasetR$ResectedSegments) * 0.179) +
-    (as.numeric(datasetR$Thoracotomy) * 0.634) +
-    (as.numeric(datasetR$Malignant) * 0.769)
+    # Calculate LP
+    LP <- -6.036 +
+      (as.numeric(datasetR$Age) * 0.041) +
+      (as.numeric(datasetR$MaleSex) * 0.493) +
+      (as.numeric(datasetR$ECOG) * 0.183) -
+      (as.numeric(datasetR$DLCOPredicted) * 0.029) -
+      (as.numeric(datasetR$BMI) * 0.056) +
+      (as.numeric(datasetR$CreatinineumolL) * 0.005) +
+      (as.numeric(datasetR$Anaemia) * 0.242) +
+      (as.numeric(datasetR$Arrhythmia) * 0.608) +
+      (as.numeric(datasetR$Right) * 0.379) +
+      (as.numeric(datasetR$ResectedSegments) * 0.179) +
+      (as.numeric(datasetR$Thoracotomy) * 0.634) +
+      (as.numeric(datasetR$Malignant) * 0.769)
+    
+    
+    # Calculate Pi
+    Pi <- exp(LP) / (1 + exp(LP))
+    
+    # Add LP and Pi as new columns
+    datasetR$LP <- LP
+    datasetR$Pi <- Pi
+    resect_datasets_LP[[dataset_name]] <- datasetR
+  }
 
-  
-  # Calculate Pi
-  Pi <- exp(LP) / (1 + exp(LP))
-  
-  # Add LP and Pi as new columns
-  datasetR$LP <- LP
-  datasetR$Pi <- Pi
-  resect_datasets_LP[[dataset_name]] <- datasetR
-  
-}
 
 
 
@@ -411,6 +409,8 @@ for (dataset_name in names(thoracoscore_datasets_LP)) {
 
 
 
+
+
 # Function to create and print calibration plots for each dataset
 create_calibration_plots <- function(dataset_list, dataset_names, outcome_var) {
   for (i in seq_along(dataset_list)) {
@@ -439,6 +439,7 @@ create_calibration_plots <- function(dataset_list, dataset_names, outcome_var) {
       ggplot2::geom_abline(ggplot2::aes(intercept = 0, slope = 1, linetype = "Reference", colour = "Reference"), show.legend = FALSE) +
       ggplot2::geom_point(alpha = 0) +
       ggplot2::coord_fixed() +
+      ggplot2::xlim(c(0,1)) + ylim(c(0,1)) + 
       ggplot2::theme_bw(base_size = 12) +
       ggplot2::labs(color = "Guide name", linetype = "Guide name") +
       ggplot2::scale_linetype_manual(values = c("dashed", "solid"), breaks = c("Reference", "Calibration Curve"), labels = c("Reference", "Calibration Curve")) +
