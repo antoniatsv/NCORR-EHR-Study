@@ -20,6 +20,12 @@ library(ggh4x)
 
 set.seed(123)
 
+#iter <- 100
+
+#all_results <- data.frame()
+
+#for (i in 1:iter) {
+
 # Read SPSS data
 thoracic_raw <- read_sav("6600_anonymous.sav")
 
@@ -143,10 +149,10 @@ mean_zero_imputation <- function(df) {
 
 
 ### MICE 
-mice_function <- function(df, m = m, outcome_var = NULL, include_outcome) {
+mice_function <- function(df, m = m, outcome_var, include_outcome) {
   
   print(is.data.frame(df))
-  dummy_run <- mice(df, m = 1, maxit = 0)
+  dummy_run <- mice(df, m = m, maxit = 0)
   predmat <- dummy_run$predictorMatrix
   
   if (include_outcome == FALSE) {
@@ -160,24 +166,24 @@ mice_function <- function(df, m = m, outcome_var = NULL, include_outcome) {
   print(predmat)
   print(dummy_run$method)
   
-  method <- mice(df, predmat = predmat, m = m, print = FALSE)
+  method <- mice(df, method = dummy_run$method, predictorMatrix = predmat, m = m, print = FALSE)
   
   return(method)
 }
 
 
 ### 'MASTER' IMPUTATION FUNCTION
-imputation_function <- function(df = df, m = m, outcome_var, include_outcome) {
+imputation_function <- function(df = df, m = m) {
   
-  MI_noY_val_resect <- mice_function(df = df_val_resect, m = m, include_outcome = FALSE)
+  MI_noY_val_resect <- mice_function(df = df_val_resect, m = m, include_outcome = FALSE, outcome_var = "Deadat90days")
   MI_withY_val_resect <- mice_function(df = df_val_resect, m = m, include_outcome = TRUE, outcome_var = "Deadat90days")
-  MI_noY_imp_resect <- mice_function(df = df_imp_resect, m = m, include_outcome = FALSE)
+  MI_noY_imp_resect <- mice_function(df = df_imp_resect, m = m, include_outcome = FALSE, outcome_var = "Deadat90days")
   MI_withY_imp_resect <- mice_function(df = df_imp_resect, m = m, include_outcome = TRUE, outcome_var = "Deadat90days")
   
-  MI_noY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = FALSE)
-  MI_withY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = TRUE, outcome_var = "DeadatatDischarge")
-  MI_noY_imp_thoracoscore <- mice_function(df = df_imp_thoracoscore, m = m, include_outcome = FALSE)
-  MI_withY_imp_thoracoscore <- mice_function(df = df_imp_thoracoscore, m = m, include_outcome = TRUE, outcome_var = "DeadatatDischarge")
+  MI_noY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = FALSE, outcome_var = "DeadatDischarge")
+  MI_withY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = TRUE, outcome_var = "DeadatDischarge")
+  MI_noY_imp_thoracoscore <- mice_function(df = df_imp_thoracoscore, m = m, include_outcome = FALSE, outcome_var = "DeadatDischarge")
+  MI_withY_imp_thoracoscore <- mice_function(df = df_imp_thoracoscore, m = m, include_outcome = TRUE, outcome_var = "DeadatDischarge")
     
   CCA_val_resect <- CCA_function(df = df_val_resect)
   #CCA_imp_resect <- CCA_function(df = df_imp_resect)
@@ -213,11 +219,17 @@ imputation_function <- function(df = df, m = m, outcome_var, include_outcome) {
   
 }
 
-imputed_datasets <- imputation_function(df, m = 5, outcome_var, include_outcome)
+imputed_datasets <- imputation_function(df, m = 5)
 
 
-imputed_datasets <- imputed_datasets %>% 
-  map_if(grepl("MI", names(.)), mice::complete, action = "long")
+
+rm(df_val_resect)
+rm(df_imp_resect)
+rm(df_val_thoracoscore)
+rm(df_imp_thoracoscore)
+
+#imputed_datasets <- imputed_datasets %>% 
+  #map_if(grepl("MI", names(.)), mice::complete, action = "long")
 
 
 
@@ -227,14 +239,18 @@ imputed_datasets <- imputed_datasets %>%
 
 ################################ Calculate LP and Pi  ########################################
 
-resect_datasets_LP <- imputed_datasets[grepl("resect", names(imputed_datasets))] 
-thoracoscore_datasets_LP <- imputed_datasets[grepl("thoracoscore", names(imputed_datasets))] 
+R_datasets <- imputed_datasets[grepl("resect", names(imputed_datasets))] 
+T_datasets <- imputed_datasets[grepl("thoracoscore", names(imputed_datasets))] 
 
 
-for (dataset_name in names(resect_datasets_LP)) {
-  datasetR <- resect_datasets_LP[[dataset_name]]
+
+for (dataset_name in names(R_datasets)) {
+  datasetR <- R_datasets[[dataset_name]]
   
-    # Calculate LP
+  if (is.mids(datasetR)) {
+    mice::complete(datasetR, action = "long") #extracts imputed datasets from mids (breakpoint - it is making all MI datasets identical!!)
+    
+    # Calculate LP for each observation
     LP <- -6.036 +
       (as.numeric(datasetR$Age) * 0.041) +
       (as.numeric(datasetR$MaleSex) * 0.493) +
@@ -249,22 +265,50 @@ for (dataset_name in names(resect_datasets_LP)) {
       (as.numeric(datasetR$Thoracotomy) * 0.634) +
       (as.numeric(datasetR$Malignant) * 0.769)
     
+    #LP_mean <- datasetR %>%
+    #group_by(ID) %>%
+    #summarise(LP_mean = mean(LP))
     
-    # Calculate Pi
     Pi <- exp(LP) / (1 + exp(LP))
     
-    # Add LP and Pi as new columns
+    
     datasetR$LP <- LP
     datasetR$Pi <- Pi
-    resect_datasets_LP[[dataset_name]] <- datasetR
+    
+  }  else {
+    
+    LP <- -6.036 +
+      (as.numeric(datasetR$Age) * 0.041) +
+      (as.numeric(datasetR$MaleSex) * 0.493) +
+      (as.numeric(datasetR$ECOG) * 0.183) -
+      (as.numeric(datasetR$DLCOPredicted) * 0.029) -
+      (as.numeric(datasetR$BMI) * 0.056) +
+      (as.numeric(datasetR$CreatinineumolL) * 0.005) +
+      (as.numeric(datasetR$Anaemia) * 0.242) +
+      (as.numeric(datasetR$Arrhythmia) * 0.608) +
+      (as.numeric(datasetR$Right) * 0.379) +
+      (as.numeric(datasetR$ResectedSegments) * 0.179) +
+      (as.numeric(datasetR$Thoracotomy) * 0.634) +
+      (as.numeric(datasetR$Malignant) * 0.769)
+    
+    Pi <- exp(LP) / (1 + exp(LP))
+    
   }
+  
+  # Add LP and Pi as new columns
+  datasetR$LP <- LP
+  datasetR$Pi <- Pi
+  
+  R_datasets[[dataset_name]] <- datasetR
+}
 
 
+#######
 
 
 # Calculate LP and Pi for datasets with 'thoracoscore' in their name
-for (dataset_name in names(thoracoscore_datasets_LP)) {
-  datasetT <- thoracoscore_datasets_LP[[dataset_name]]
+for (dataset_name in names(T_datasets)) {
+  datasetT <- T_datasets[[dataset_name]]
   
   # Calculate LP
   LP <- -7.3737 +
@@ -287,7 +331,7 @@ for (dataset_name in names(thoracoscore_datasets_LP)) {
   datasetT$LP <- LP
   datasetT$Pi <- Pi
   
-  thoracoscore_datasets_LP[[dataset_name]] <- datasetT
+  T_datasets[[dataset_name]] <- datasetT
 }
 
 
@@ -309,8 +353,8 @@ library(pROC)
 # Create an empty df to store the results
 target_measuresR <- data.frame()
 
-for (dataset_name in names(resect_datasets_LP)) {
-  datasetR <- resect_datasets_LP[[dataset_name]]
+for (dataset_name in names(R_datasets)) {
+  datasetR <- R_datasets[[dataset_name]]
   
   # Specify the outcome variable
   outcome_var <- as.numeric(datasetR$Deadat90days) #set it up as.numeric at the start, as I was getting errors but I think something's gone wrong now
@@ -356,13 +400,25 @@ for (dataset_name in names(resect_datasets_LP)) {
 }
 
 
+# Append the iter variable
+#target_measuresR$Iteration <- i
+#target_measuresT$Iteration <- i
+
+# Append the results for this iteration to the all_results data frame
+#all_results <- rbind(all_results, target_measuresR, target_measuresT)
+#}
+
+
+#all_results %>%
+  #group_by(Dataset) %>%
+  #summarise_all(~mean(.))
 
 ########################################## Thoracoscore ########################################
 # Create an empty df to store the results
 target_measuresT <- data.frame()
 
-for (dataset_name in names(thoracoscore_datasets_LP)) {
-  datasetT <- thoracoscore_datasets_LP[[dataset_name]]
+for (dataset_name in names(T_datasets)) {
+  datasetT <- T_datasets[[dataset_name]]
   
   # Specify the outcome variable
   outcome_var <- as.numeric(datasetT$DeadatDischarge) #set it up as.numeric at the start, as I was getting errors but I think something's gone wrong now
@@ -406,7 +462,6 @@ for (dataset_name in names(thoracoscore_datasets_LP)) {
   # Append the measures to the overall results data frame
   target_measuresT <- rbind(target_measuresT, measures)
 }
-
 
 
 
