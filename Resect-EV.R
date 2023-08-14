@@ -144,7 +144,6 @@ mean_zero_imputation <- function(df) {
 
 ### MICE 
 mice_function <- function(df, m = m, outcome_var, include_outcome) {
-  
   print(is.data.frame(df))
   dummy_run <- mice(df, m = m, maxit = 0)
   predmat <- dummy_run$predictorMatrix
@@ -171,19 +170,22 @@ imputation_function <- function(df = df, m = m) {
   
   MI_noY_val_resect <- mice_function(df = df_val_resect, m = m, include_outcome = FALSE, outcome_var = "Deadat90days")
   MI_withY_val_resect <- mice_function(df = df_val_resect, m = m, include_outcome = TRUE, outcome_var = "Deadat90days")
+  
   MI_noY_imp_resect <- mice_function(df = df_imp_resect, m = m, include_outcome = FALSE, outcome_var = "Deadat90days")
   MI_withY_imp_resect <- mice_function(df = df_imp_resect, m = m, include_outcome = TRUE, outcome_var = "Deadat90days")
   
+  
   MI_noY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = FALSE, outcome_var = "DeadatDischarge")
   MI_withY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = TRUE, outcome_var = "DeadatDischarge")
+  
   MI_noY_imp_thoracoscore <- mice_function(df = df_imp_thoracoscore, m = m, include_outcome = FALSE, outcome_var = "DeadatDischarge")
   MI_withY_imp_thoracoscore <- mice_function(df = df_imp_thoracoscore, m = m, include_outcome = TRUE, outcome_var = "DeadatDischarge")
   
   CCA_val_resect <- CCA_function(df = df_val_resect)
-  #CCA_imp_resect <- CCA_function(df = df_imp_resect)
+
   
   CCA_val_thoracoscore <- CCA_function(df = df_val_thoracoscore)
-  #CCA_imp_thoracoscore <- CCA_function(df = df_imp_thoracoscore)
+
   
   mean_zero_val_resect <- mean_zero_imputation(df = df_val_resect)
   mean_zero_imp_resect <- mean_zero_imputation(df = df_imp_resect)
@@ -275,11 +277,12 @@ for (dataset_name in names(R_datasets)) {
   datasetR$Pi <- Pi
   
   R_datasets[[dataset_name]] <- datasetR
+  
+  
 }
 
 
 ################################
-
 # Create an empty df to store the results
 target_measuresR <- data.frame()
 
@@ -326,7 +329,7 @@ for (dataset_name in names(R_datasets)) {
   )
   
   # Append the measures to the overall results data frame
-  target_measuresR <- rbind(target_measuresR, measures)
+  target_measuresR <- bind_rows(target_measuresR, measures)
 }
 
 

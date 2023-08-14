@@ -396,7 +396,7 @@ for (dataset_name in names(R_datasets)) {
   )
   
   # Append the measures to the overall results data frame
-  target_measuresR <- rbind(target_measuresR, measures)
+  target_measuresR <- bind_rows(target_measuresR, measures)
 }
 
 
