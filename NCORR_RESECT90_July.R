@@ -162,7 +162,7 @@ mice_function <- function(df, m = m, outcome_var, include_outcome) {
 
   predmat[,"ID"] <- 0  
   predmat["ID",] <- 0
-  
+
   print(predmat)
   print(dummy_run$method)
   
@@ -179,7 +179,7 @@ imputation_function <- function(df = df, m = m) {
   MI_withY_val_resect <- mice_function(df = df_val_resect, m = m, include_outcome = TRUE, outcome_var = "Deadat90days")
   MI_noY_imp_resect <- mice_function(df = df_imp_resect, m = m, include_outcome = FALSE, outcome_var = "Deadat90days")
   MI_withY_imp_resect <- mice_function(df = df_imp_resect, m = m, include_outcome = TRUE, outcome_var = "Deadat90days")
-  
+
   MI_noY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = FALSE, outcome_var = "DeadatDischarge")
   MI_withY_val_thoracoscore <- mice_function(df = df_val_thoracoscore, m = m, include_outcome = TRUE, outcome_var = "DeadatDischarge")
   MI_noY_imp_thoracoscore <- mice_function(df = df_imp_thoracoscore, m = m, include_outcome = FALSE, outcome_var = "DeadatDischarge")
