@@ -428,12 +428,6 @@ target_measuresR <- data.frame()
 for (dataset_name in names(R_datasets)) {
   datasetR <- R_datasets[[dataset_name]]
   
-  #if (nrow(datasetR) == m * (nrow(df)/2)) { ### RUBIN'S RULES for MI datasets
-  #for(m_imp in 1:m) {
-  
-  #}
-  #} else {
-  
   #}
   # Specify the outcome variable
   outcome_var <- as.numeric(datasetR$Deadat90days) #set it up as.numeric at the start, as I was getting errors but I think something's gone wrong now
@@ -658,6 +652,501 @@ MInoY_bias_R <- subset(R_imp, Dataset == "MI no Y") %>%
   rename("Dataset_val" = "Dataset.y")
 
 #####
+
+
+## MI no Y at implementation 
+MIwithY_bias_R <- subset(R_imp, Dataset == "MI with Y") %>%
+  rename_at(vars("estimates"), function(x) paste0("true_", x)) %>%
+  rename_at(vars("LCI_values"), function(x) paste0("imp_", x)) %>%
+  rename_at(vars("UCI_values"), function(x) paste0("imp_",x)) %>%
+  left_join(R_val, MIwithY_bias_R,
+            multiple = "all",
+            by = "target_measures") %>%
+  mutate(bias = estimates - true_estimates,
+         LCI_diff = LCI_values - imp_LCI_values,
+         UCI_diff = UCI_values - imp_UCI_values) %>%
+  rename("Dataset_imp" = "Dataset.x") %>%
+  rename("Dataset_val" = "Dataset.y")
+
+
+#####
+# Mean + RFA at implementation
+## MI no Y at implementation 
+Mean_RFA_bias_R <- subset(R_imp, Dataset == "Mean + RFA") %>%
+  rename_at(vars("estimates"), function(x) paste0("true_", x)) %>%
+  rename_at(vars("LCI_values"), function(x) paste0("imp_", x)) %>%
+  rename_at(vars("UCI_values"), function(x) paste0("imp_",x)) %>%
+  left_join(R_val, Mean_RFA_bias_R,
+            multiple = "all",
+            by = "target_measures") %>%
+  mutate(bias = estimates - true_estimates,
+         LCI_diff = LCI_values - imp_LCI_values,
+         UCI_diff = UCI_values - imp_UCI_values) %>%
+  rename("Dataset_imp" = "Dataset.x") %>%
+  rename("Dataset_val" = "Dataset.y")
+
+
+
+all_bias_R <- MInoY_bias_R %>% 
+  bind_rows(MIwithY_bias_R) %>%
+  bind_rows(Mean_RFA_bias_R)
+
+
+
+all_bias_R$target_measures <- factor(all_bias_R$target_measures, levels = c("AUC", "Calibration Intercept", "Calibration Slope", "Brier Score"))
+
+#####
+##### plot "bias" 
+plot_R <- ggplot(data = all_bias_R, aes(x = bias, y = Dataset_val, color = factor(target_measures),
+                                        shape = factor(target_measures))) +
+  geom_errorbar(aes(xmin = LCI_diff, xmax = UCI_diff), width = .1) + ### hashtag needs removing once the UCI and LCI are calculated
+  geom_point(size = 3, stroke = 0.5) +
+  guides(color = guide_legend(reverse = TRUE)) +
+  scale_shape_manual(values = c(8, 17, 16, 15)) +
+  scale_color_brewer(palette = "Set1") +
+  geom_vline(xintercept = 0, linetype = "dotted") +
+  xlab("Bias") +
+  ylab("Validation Data Imputation Methods") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    strip.text = element_text(size = 16),
+    panel.background = element_rect(fill = "gray90"),
+    panel.spacing.x = unit(0.5, "lines")
+  ) +
+  ggh4x::facet_grid2(target_measures ~ Dataset_imp, scales = "free_x", independent = "x") +
+  scale_x_continuous(limits = function(x) c(-max(abs(x)), max(abs(x)))) +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = 1.5),
+    strip.text = element_text(size = 14, hjust = 0.5),
+    strip.placement = "outside"
+  ) +
+  ggtitle("Missingness mechanisms at model implementation") +
+  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0.5))
+
+plot_R <- plot_R + theme(panel.grid.major = element_line(size = 1.5))
+
+print(plot_R)
+
+
+##############################################################################################################################
+
+T_datasets <- imputed_datasets[grepl("thoracoscore", names(imputed_datasets))]
+
+
+for (dataset_name in names(T_datasets)) {
+  datasetT <- T_datasets[[dataset_name]]
+  
+  if (is.mids(datasetT)) {
+    datasetT <- mice::complete(datasetT, action = "long")
+    
+    
+    datasetT$LP <- -7.3737 +
+      (as.numeric(datasetT$Age55to65) * 0.7679) + 
+      (as.numeric(datasetT$AgeOver65) * 1.0073) + 
+      (as.numeric(datasetT$MaleSex) * 0.4505) +
+      (as.numeric(datasetT$ASA) * 0.6057) +
+      (as.numeric(datasetT$ECOG3orAbove) * 0.689) +
+      (as.numeric(datasetT$NYHA3or4) * 0.9075) +
+      (as.numeric(datasetT$Urgency) * 0.8443) +
+      (as.numeric(datasetT$Pneumonectomy) * 1.2176) +
+      (as.numeric(datasetT$Malignant) * 1.2423) + 
+      (as.numeric(datasetT$ComorbidityScore1and2) * 0.7447) + 
+      (as.numeric(datasetT$ComorbidityScore3andAbove) * 0.9065)
+    
+    LP_mean <- datasetT %>%
+      dplyr::group_by(.id) %>%
+      dplyr::summarise(LP_mean = mean(LP)) %>%
+      pull(LP_mean)
+    
+    Pi <- exp(LP_mean) / (1 + exp(LP_mean))
+    
+    
+    datasetT <- data.frame("LP" = LP_mean,
+                           "Pi" = Pi,
+                           "DeadatDischarge" = datasetT$DeadatDischarge[1:3300])
+    
+  } else {
+    
+    # Calculate LP
+    LP <- -7.3737 +
+      (as.numeric(datasetT$Age55to65) * 0.7679) + 
+      (as.numeric(datasetT$AgeOver65) * 1.0073) + 
+      (as.numeric(datasetT$MaleSex) * 0.4505) +
+      (as.numeric(datasetT$ASA) * 0.6057) +
+      (as.numeric(datasetT$ECOG3orAbove) * 0.689) +
+      (as.numeric(datasetT$NYHA3or4) * 0.9075) +
+      (as.numeric(datasetT$Urgency) * 0.8443) +
+      (as.numeric(datasetT$Pneumonectomy) * 1.2176) +
+      (as.numeric(datasetT$Malignant) * 1.2423) + 
+      (as.numeric(datasetT$ComorbidityScore1and2) * 0.7447) + 
+      (as.numeric(datasetT$ComorbidityScore3andAbove) * 0.9065)
+    
+    # Calculate Pi
+    Pi <- exp(LP) / (1 + exp(LP))
+    
+    datasetT$LP <- LP
+    datasetT$Pi <- Pi
+    
+  }
+  
+  T_datasets[[dataset_name]] <- datasetT
+  
+}
+
+
+################################
+# Create an empty df to store the results
+target_measuresT <- data.frame()
+
+
+for (dataset_name in names(T_datasets)) {
+datasetT <- T_datasets[[dataset_name]]
+
+# Specify the outcome variable
+outcome_var <- as.numeric(datasetT$DeadatDischarge)
+
+# Specify the predicted probabilities
+Pi <- datasetT$Pi
+
+# Calculate Brier Score
+Brier_individuals <- (Pi - outcome_var)^2
+Brier <- mean(Brier_individuals)
+Brier_var <- var(Brier_individuals)/length(Pi)
+Brier_SE <- sqrt(Brier_var) 
+Brier_LCI <- Brier - (1.96*Brier_SE)
+Brier_UCI <- Brier + (1.96*Brier_SE)
+
+# Calculate Calibration Intercept
+LP <- log(Pi/ (1 - Pi))
+Cal_int_mod <- glm(outcome_var ~ offset(LP), family = binomial(link = "logit"))
+Cal_Int <- as.numeric(coef(Cal_int_mod)[1])
+Cal_Int_var <- vcov(Cal_int_mod)[1,1]
+Cal_Int_SE <- sqrt(Cal_Int_var) 
+Cal_Int_LCI <- Cal_Int - (1.96*Cal_Int_SE)
+Cal_Int_UCI <- Cal_Int + (1.96*Cal_Int_SE)
+
+
+# Calculate Calibration Slope
+Cal_Slope_mod <- glm(outcome_var ~ LP, family = binomial(link = "logit"))
+Cal_Slope <- as.numeric(coef(Cal_Slope_mod)[2])
+Cal_Slope_var <- vcov(Cal_Slope_mod)[2,2]
+Cal_Slope_SE<- sqrt(Cal_Slope_var) 
+Cal_Slope_LCI <- Cal_Slope - (1.96*Cal_Slope_SE)
+Cal_Slope_UCI <- Cal_Slope + (1.96*Cal_Slope_SE)
+
+# Calculate AUC
+
+AUC <- roc(response = outcome_var, 
+           predictor = as.vector(Pi),
+           direction = "<",
+           levels = c(0,1))$auc
+AUC_var <- var(AUC, method = "delong") #approximation method used for AUC to calculate the variance
+AUC_SE <- sqrt(AUC_var) 
+AUC_LCI <- AUC - (1.96*AUC_SE)
+AUC_UCI <- AUC + (1.96*AUC_SE)
+
+
+# Create a data frame with target measures for the current dataset
+measures <- data.frame("Dataset" = dataset_name,
+                       "Cal_Int" = Cal_Int,
+                       "Cal_Int_var" = Cal_Int_var,
+                       "Cal_Int_LCI" = as.numeric(Cal_Int_LCI),
+                       "Cal_Int_UCI" = as.numeric(Cal_Int_UCI),
+                       
+                       "Cal_Slope" = Cal_Slope,
+                       "Cal_Slope_var" = as.numeric(Cal_Slope_var),
+                       "Cal_Slope_LCI" = as.numeric(Cal_Slope_LCI),
+                       "Cal_Slope_UCI" = as.numeric(Cal_Slope_UCI),
+                       
+                       "AUC" = as.numeric(AUC),
+                       "AUC_var" = as.numeric(AUC_var),
+                       "AUC_LCI" = as.numeric(AUC_LCI),
+                       "AUC_UCI" = as.numeric(AUC_UCI),
+                       
+                       
+                       "Brier" = as.numeric(Brier),
+                       "Brier_var" = as.numeric(Brier_var),
+                       "Brier_LCI" = as.numeric(Brier_LCI),
+                       "Brier_UCI" = as.numeric(Brier_UCI)
+)
+
+# Append the measures to the overall results data frame
+target_measuresT <- bind_rows(target_measuresT, measures)
+
+}
+
+
+################################################################################
+
+# Function to create and print calibration plots for each dataset
+create_calibration_plots <- function(dataset_list, dataset_names, outcome_var) {
+  for (i in seq_along(dataset_list)) {
+    dataset_name <- names(dataset_list)[i]
+    plot_title <- dataset_names[i]
+    
+    # Extract necessary data from the dataset
+    outcome_var_values <- dataset_list[[dataset_name]][[outcome_var]]
+    Pi <- dataset_list[[dataset_name]]$Pi
+    
+    # Fit the spline model
+    spline_model <- stats::glm(outcome_var_values ~ splines::ns(LP, df = 3),
+                               data = dataset_list[[dataset_name]],
+                               family = stats::binomial(link = "logit"))
+    
+    # Predict with spline model
+    spline_preds <- stats::predict(spline_model, type = "response", se = TRUE)
+    
+    # Create the data frame for the calibration plot
+    plot_data <- data.frame("p" = Pi,
+                            "o" = spline_preds$fit)
+    
+    # Create the calibration plot using ggplot2
+    calibration_plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = p, y = o)) +
+      ggplot2::geom_line(ggplot2::aes(linetype = "Calibration Curve", colour = "Calibration Curve")) +
+      ggplot2::geom_abline(ggplot2::aes(intercept = 0, slope = 1, linetype = "Reference", colour = "Reference"), show.legend = FALSE) +
+      ggplot2::geom_point(alpha = 0) +
+      ggplot2::coord_fixed() +
+      ggplot2::xlim(c(0,1)) + ylim(c(0,1)) + 
+      ggplot2::theme_bw(base_size = 12) +
+      ggplot2::labs(color = "Guide name", linetype = "Guide name") +
+      ggplot2::scale_linetype_manual(values = c("dashed", "solid"), breaks = c("Reference", "Calibration Curve"), labels = c("Reference", "Calibration Curve")) +
+      ggplot2::scale_colour_manual(values = c("black", "blue"), breaks = c("Reference", "Calibration Curve")) +
+      ggplot2::theme(legend.title = ggplot2::element_blank()) +
+      ggplot2::ggtitle(plot_title)
+    
+    # Print the calibration plot
+    print(calibration_plot)
+  }
+}
+
+# List of dataset names and their new names for Thoracoscore datasets
+thoracoscore_datasets <- list(MI_noY_val_thoracoscore = T_datasets$MI_noY_val_thoracoscore, 
+                              MI_withY_val_thoracoscore = T_datasets$MI_withY_val_thoracoscore,
+                              MI_noY_imp_thoracoscore = T_datasets$MI_noY_imp_thoracoscore,
+                              MI_withY_imp_thoracoscore = T_datasets$MI_withY_imp_thoracoscore,
+                              CCA_val_thoracoscore = T_datasets$CCA_val_thoracoscore,
+                              mean_zero_val_thoracoscore = T_datasets$mean_zero_val_thoracoscore,
+                              mean_zero_imp_thoracoscore = T_datasets$mean_zero_imp_thoracoscore)
+
+new_namesT <- c("Thoracoscore: MI no Y at validation", 
+                "Thoracoscore: MI with Y at validation",
+                "Thoracoscore: MI no Y at implementation", 
+                "Thoracoscore: MI with Y at implementation", 
+                "Thoracoscore: CCA at validation",
+                "Thoracoscore: Mean + Risk Factor Absent at validation",
+                "Thoracoscore: Mean + Risk Factor Absent at implementation")
+
+# Example usage for Resect datasets:
+create_calibration_plots(dataset_list = thoracoscore_datasets, 
+                         dataset_names = new_namesT,
+                         outcome_var = "DeadatDischarge")
+
+
+
+################################################################################
+#turn data into long format and rename TM
+
+
+# Pivot the first set of columns
+target_measuresT_long <- target_measuresT %>%
+  pivot_longer(cols = c("Cal_Int", "Cal_Slope", "AUC", "Brier"), 
+               names_to = "target_measures", 
+               values_to = "estimates") %>%
+  select(Dataset, target_measures, estimates) %>%
+  mutate(target_measures = recode(target_measures,
+                                  Cal_Int = 'Calibration Intercept',
+                                  Cal_Slope = 'Calibration Slope',
+                                  AUC = 'AUC',
+                                  Brier = 'Brier Score')) %>%
+  left_join(target_measuresT %>%
+              pivot_longer(cols = c("Cal_Int_LCI", "Cal_Slope_LCI", "AUC_LCI", "Brier_LCI"), 
+                           names_to = "target_measures", 
+                           values_to = "LCI_values") %>%
+              select(Dataset, target_measures, LCI_values) %>%
+              mutate(target_measures = recode(target_measures,
+                                              Cal_Int_LCI = 'Calibration Intercept',
+                                              Cal_Slope_LCI = 'Calibration Slope',
+                                              AUC_LCI = 'AUC',
+                                              Brier_LCI = 'Brier Score')),
+            by = c("Dataset", "target_measures")) %>%
+  left_join(target_measuresT %>%
+              pivot_longer(cols = c("Cal_Int_UCI", "Cal_Slope_UCI", "AUC_UCI", "Brier_UCI"), 
+                           names_to = "target_measures", 
+                           values_to = "UCI_values") %>%
+              select(Dataset, target_measures, UCI_values) %>%
+              mutate(target_measures = recode(target_measures,
+                                              Cal_Int_UCI = 'Calibration Intercept',
+                                              Cal_Slope_UCI = 'Calibration Slope',
+                                              AUC_UCI = 'AUC',
+                                              Brier_UCI = 'Brier Score')),
+            by = c("Dataset", "target_measures"))
+
+
+
+#split the data into val and imp 
+T_val <- target_measuresT_long[target_measuresT_long$Dataset %like% "val", ]
+T_imp <- target_measuresT_long[target_measuresT_long$Dataset %like% "imp", ]
+
+T_val <- T_val %>%
+  mutate(Dataset = case_when(
+    Dataset == "MI_noY_val_thoracoscore" ~ "MI no Y",
+    Dataset == "MI_withY_val_thoracoscore" ~ "MI with Y",
+    Dataset == "CCA_val_thoracoscore" ~ "CCA",
+    Dataset == "mean_zero_val_thoracoscore" ~ "Mean + RFA",
+    TRUE ~ Dataset
+  ))
+
+
+T_imp <- T_imp %>%
+  mutate(Dataset = case_when(
+    Dataset == "MI_noY_imp_thoracoscore" ~ "MI no Y",
+    Dataset == "MI_withY_imp_thoracoscore" ~ "MI with Y",
+    Dataset == "CCA_imp_thoracoscore" ~ "CCA",
+    Dataset == "mean_zero_imp_thoracoscore" ~ "Mean + RFA",
+    TRUE ~ Dataset
+  ))
+
+
+##############
+## MI no Y at implementation 
+MInoY_bias_T <- subset(T_imp, Dataset == "MI no Y") %>%
+  rename_at(vars("estimates"), function(x) paste0("true_", x)) %>%
+  rename_at(vars("LCI_values"), function(x) paste0("imp_", x)) %>%
+  rename_at(vars("UCI_values"), function(x) paste0("imp_",x)) %>%
+  left_join(T_val, MInoY_bias_T,
+            multiple = "all",
+            by = "target_measures") %>%
+  mutate(bias = estimates - true_estimates,
+         LCI_diff = LCI_values - imp_LCI_values,
+         UCI_diff = UCI_values - imp_UCI_values) %>%
+  rename("Dataset_imp" = "Dataset.x") %>%
+  rename("Dataset_val" = "Dataset.y")
+
+#####
+
+
+## MI no Y at implementation 
+MIwithY_bias_T <- subset(T_imp, Dataset == "MI with Y") %>%
+  rename_at(vars("estimates"), function(x) paste0("true_", x)) %>%
+  rename_at(vars("LCI_values"), function(x) paste0("imp_", x)) %>%
+  rename_at(vars("UCI_values"), function(x) paste0("imp_",x)) %>%
+  left_join(T_val, MIwithY_bias_T,
+            multiple = "all",
+            by = "target_measures") %>%
+  mutate(bias = estimates - true_estimates,
+         LCI_diff = LCI_values - imp_LCI_values,
+         UCI_diff = UCI_values - imp_UCI_values) %>%
+  rename("Dataset_imp" = "Dataset.x") %>%
+  rename("Dataset_val" = "Dataset.y")
+
+
+#####
+# Mean + RFA at implementation
+## MI no Y at implementation 
+Mean_RFA_bias_T <- subset(T_imp, Dataset == "Mean + RFA") %>%
+  rename_at(vars("estimates"), function(x) paste0("true_", x)) %>%
+  rename_at(vars("LCI_values"), function(x) paste0("imp_", x)) %>%
+  rename_at(vars("UCI_values"), function(x) paste0("imp_",x)) %>%
+  left_join(T_val, Mean_RFA_bias_T,
+            multiple = "all",
+            by = "target_measures") %>%
+  mutate(bias = estimates - true_estimates,
+         LCI_diff = LCI_values - imp_LCI_values,
+         UCI_diff = UCI_values - imp_UCI_values) %>%
+  rename("Dataset_imp" = "Dataset.x") %>%
+  rename("Dataset_val" = "Dataset.y")
+
+
+
+all_bias_T <- MInoY_bias_T %>% 
+  bind_rows(MIwithY_bias_T) %>%
+  bind_rows(Mean_RFA_bias_T)
+
+
+
+all_bias_T$target_measures <- factor(all_bias_T$target_measures, levels = c("AUC", "Calibration Intercept", "Calibration Slope", "Brier Score"))
+
+####
+##### plot "bias" 
+plot_T <- ggplot(data = all_bias_T, aes(x = bias, y = Dataset_val, color = factor(target_measures),
+                                        shape = factor(target_measures))) +
+  geom_errorbar(aes(xmin = LCI_diff, xmax = UCI_diff), width = .1) + ### hashtag needs removing once the UCI and LCI are calculated
+  geom_point(size = 3, stroke = 0.5) +
+  guides(color = guide_legend(reverse = TRUE)) +
+  scale_shape_manual(values = c(8, 17, 16, 15)) +
+  scale_color_brewer(palette = "Set1") +
+  geom_vline(xintercept = 0, linetype = "dotted") +
+  xlab("Difference in the performance metrics under different combinations of imputation methods") +
+  ylab("Validation Data Imputation Methods") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    strip.text = element_text(size = 16),
+    panel.background = element_rect(fill = "gray90"),
+    panel.spacing.x = unit(0.5, "lines")
+  ) +
+  ggh4x::facet_grid2(target_measures ~ Dataset_imp, scales = "free_x", independent = "x") +
+  scale_x_continuous(limits = function(x) c(-max(abs(x)), max(abs(x)))) +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = 1.5),
+    strip.text = element_text(size = 14, hjust = 0.5),
+    strip.placement = "outside"
+  ) +
+  ggtitle("Missingness mechanisms at model implementation") +
+  theme(plot.title = element_text(face = "bold", size = 16, hjust = 0.5))
+
+plot_T <- plot_T + theme(panel.grid.major = element_line(size = 1.5))
+
+print(plot_T)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
