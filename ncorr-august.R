@@ -732,6 +732,20 @@ all_bias_R$target_measures <- factor(all_bias_R$target_measures, levels = c("AUC
 
 #####
 ##### plot "bias" 
+
+###corrected mean
+all_bias_R_filtered <- all_bias_R %>%
+  filter(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + FRA") 
+  ) %>%
+  mutate(difference_identical = estimates - true_estimates) %>%
+  group_by(target_measures) %>%
+  summarise(mean_difference_identical = mean(difference_identical))
+
+
+
 all_bias_R_joined <- all_bias_R_filtered %>%
   left_join(all_bias_R,
             by = "target_measures",
@@ -758,6 +772,7 @@ all_bias_R_joined <- all_bias_R_filtered %>%
     UCI_diff, 
     UCI_diff + mean_difference_identical  
   ))
+
 
 
 plot_R <- ggplot(data = all_bias_R_joined, aes(x = bias_adjusted, y = Dataset_val, color = factor(target_measures),
