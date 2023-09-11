@@ -732,15 +732,43 @@ all_bias_R$target_measures <- factor(all_bias_R$target_measures, levels = c("AUC
 
 #####
 ##### plot "bias" 
-plot_R <- ggplot(data = all_bias_R, aes(x = bias, y = Dataset_val, color = factor(target_measures),
-                                        shape = factor(target_measures))) +
-  geom_errorbar(aes(xmin = LCI_diff, xmax = UCI_diff), width = .1) + ### hashtag needs removing once the UCI and LCI are calculated
+all_bias_R_joined <- all_bias_R_filtered %>%
+  left_join(all_bias_R,
+            by = "target_measures",
+            multiple = "all") %>%
+  select(target_measures, Dataset_imp, Dataset_val, mean_difference_identical, everything()) %>%
+  mutate(bias_adjusted = ifelse(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + FRA"),
+    bias,  
+    bias + mean_difference_identical  
+  ),
+  LCI_adjusted = ifelse(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + FRA"),
+    LCI_diff, 
+    LCI_diff + mean_difference_identical 
+  ),
+  UCI_adjusted = ifelse(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + FRA"),
+    UCI_diff, 
+    UCI_diff + mean_difference_identical  
+  ))
+
+
+plot_R <- ggplot(data = all_bias_R_joined, aes(x = bias_adjusted, y = Dataset_val, color = factor(target_measures),
+                                               shape = factor(target_measures))) +
+  geom_errorbar(aes(xmin = LCI_adjusted, xmax = UCI_adjusted), width = .1) + ### hashtag needs removing once the UCI and LCI are calculated
   geom_point(size = 3, stroke = 0.5) +
   guides(color = guide_legend(reverse = TRUE)) +
   scale_shape_manual(values = c(8, 17, 16, 15)) +
   scale_color_brewer(palette = "Set1") +
   geom_vline(xintercept = 0, linetype = "dotted") +
-  xlab("Bias") +
+  xlab("Adjusted Difference") +
   ylab("Validation Data Imputation Methods") +
   theme_minimal() +
   theme(
@@ -754,20 +782,22 @@ plot_R <- ggplot(data = all_bias_R, aes(x = bias, y = Dataset_val, color = facto
     panel.spacing.x = unit(0.5, "lines")
   ) +
   ggh4x::facet_grid2(target_measures ~ Dataset_imp, scales = "free_x", independent = "x") +
-  scale_x_continuous(limits = function(x) c(-max(abs(x)), max(abs(x)))) +
+  scale_x_continuous(limits = function(x) c(-max(abs(x)), max(abs(x))),
+                     breaks = scales::breaks_pretty(n = 3)) +  # set limits to center zero
   theme(
     panel.border = element_rect(color = "black", fill = NA, size = 1.5),
     strip.text = element_text(size = 14, hjust = 0.5),
     strip.placement = "outside"
   ) +
-  ggtitle("Missingness mechanisms at model implementation") +
+  ggtitle("Deployment Data Imputation Methods") +
   theme(plot.title = element_text(face = "bold", size = 16, hjust = 0.5))
 
 plot_R <- plot_R + theme(panel.grid.major = element_line(size = 1.5))
 
 print(plot_R)
 
-
+setwd("/Users/user/AntoniaPhD/00. Thesis/thesis_new/Chapter 4 figures")
+ggsave("RESECT_bias.png", units="in", width=11, height=10, dpi=300)
 
 
 
