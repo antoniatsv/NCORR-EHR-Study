@@ -20,11 +20,6 @@ library(ggh4x)
 
 set.seed(123)
 
-#iter <- 100
-
-#all_results <- data.frame()
-
-#for (i in 1:iter) {
 
 ########################################################################################################################
 
@@ -48,7 +43,7 @@ thoracic_raw$DLCOPredicted[thoracic_raw$DLCOPredicted < 18 | thoracic_raw$DLCOPr
 thoracic_raw$ECOG <- as.factor(ifelse(thoracic_raw$ECOG == "", NA, as.character(thoracic_raw$ECOG)))
 
 # Replace the blanks in ASA with NA (NOTE: the blank is a character "") check levels again 
-thoracic_raw$ASA <- as.factor(ifelse(thoracic_raw$ASA == "", NA, as.character(thoracic_raw$ASA)))
+thoracic_raw$ASA <- as.factor(ifelse(thoracic_raw$ASA3orAbove == "", NA, as.character(thoracic_raw$ASA)))
 
 # Replace the blanks in Dyspnoea with NA (NOTE: the blank is a character "") check levels again 
 thoracic_raw$Dyspnoea <- as.factor(ifelse(thoracic_raw$Dyspnoea == "", NA, as.character(thoracic_raw$Dyspnoea)))
@@ -76,7 +71,7 @@ CPMs_vars <- c("Age",
                "Malignant",
                "Age55to65",
                "AgeOver65",
-               "ASA",
+               "ASA3orAbove",
                "ECOG3orAbove",
                "NYHA3or4",
                "Urgency",
@@ -91,7 +86,9 @@ CPMs_vars <- c("Age",
                "IHD", #
                "COPD", #
                "CerebrovascularDisease", #
-               "PVD" #
+               "PVD",
+               "ComplexLobectomy",
+               "ExtendedResection"
 )
 
 
@@ -107,124 +104,6 @@ df <- df[, c(id_col_index, setdiff(seq_along(col_names), id_col_index))]
 
 df$ID <- sample(df$ID)
 
-
-########################################################################################################################
-# Table 1 of the Results' section
-
-# Calculate the % of missingness overall in the whole df
-missingness_df <- mean(is.na(df)) * 100 
-
-# Count missing values in each variable
-missing_counts <- colSums(is.na(df))
-
-# Calculate proportion of missing values in each variable
-missing_prop <- missing_counts / nrow(df)
-
-# Convert proportions to percentages
-missing_percent <- missing_prop * 100
-
-# Return results as a data frame
-result_missingness <- data.frame(missing_percent = missing_percent)
-
-
-md.pattern(df, rotate.names = TRUE)
-
-########################################################################################################################
-#### summary continuous variables ######
-
-summary_stats <- function(df) {
-  # Define continuous variables
-  cont_vars <- c("Age",
-                 "DLCOPredicted",
-                 "BMI",
-                 "CreatinineumolL",
-                 "ResectedSegments",
-                 "PPOFEV1" #
-  )
-  
-  # Define categorical variables
-  cat_vars <- c("MaleSex",
-                "ECOG",
-                "Anaemia",
-                "Arrhythmia",
-                "Right",
-                "Thoracotomy",
-                "Malignant",
-                "Age55to65",
-                "AgeOver65",
-                "ASA",
-                "ECOG3orAbove",
-                "NYHA3or4",
-                "Urgency",
-                "Pneumonectomy",
-                "ComorbidityScore1and2",
-                "ComorbidityScore3andAbove",
-                "Deadat90days",
-                "DeadatDischarge",
-                "Diabetes", #
-                "Hypertension", #
-                "Smoking", #
-                "IHD", #
-                "COPD", #
-                "CerebrovascularDisease", #
-                "PVD" #
-  )
-  
-  
-  
-  ########################################################################################################################
-  
-  # Calculate summary statistics for continuous variables
-  cont_summary <- sapply(df[cont_vars], function(x) c(mean(x, na.rm = TRUE),
-                                                      sd(x, na.rm = TRUE),
-                                                      median(x, na.rm = TRUE),
-                                                      min(x, na.rm = TRUE),
-                                                      max(x, na.rm = TRUE),
-                                                      length(x)))
-  
-  # Calculate percentage of missing values for continuous variables
-  cont_missing_percent <- sapply(df[cont_vars], function(x) round(sum(is.na(x)) / length(x) * 100, 2))
-  
-  # Combine summary statistics and missingness information for continuous variables
-  cont_summary_df <- data.frame(t(cont_summary), missing_percent = cont_missing_percent)
-  colnames(cont_summary_df) <- c("Mean", "SD", "Median", "Min", "Max", "N", "Missing_Percent")
-  rownames(cont_summary_df) <- cont_vars
-  
-  # Convert categorical variables to factors
-  df[cat_vars] <- lapply(df[cat_vars], factor)
-  
-  # Calculate summary statistics for categorical variables
-  cat_summary <- sapply(df[cat_vars], function(x) c(levels(x)[which.max(table(x))],
-                                                    paste(levels(x), collapse = ", "),
-                                                    length(x)))
-  
-  # Calculate percentage of missing values for categorical variables
-  cat_missing_percent <- sapply(df[cat_vars], function(x) round(sum(is.na(x)) / length(x) * 100, 2))
-  
-  # Combine summary statistics and missingness information for categorical variables
-  cat_summary_df <- data.frame(t(cat_summary), missing_percent = cat_missing_percent)
-  colnames(cat_summary_df) <- c("Mode", "Levels", "N", "Missing_Percent")
-  rownames(cat_summary_df) <- cat_vars
-  
-  # Plot bar charts for each categorical variable
-  for (var in cat_vars) {
-    p <- ggplot(data = df, aes_string(x = var)) +
-      geom_bar(stat = "count", fill = "steelblue") +
-      labs(title = var, x = var, y = "Frequency") + 
-      geom_text(stat = "count", aes(label = scales::percent(..count../sum(..count..))),
-                vjust = -0.5, size = 3)
-    print(p)
-  }
-  
-  return(list(cont_summary_df = cont_summary_df, cat_summary_df = cat_summary_df))
-}
-
-# Call the summary_stats function with the resect_df dataframe
-summary_tables <- summary_stats(df)
-
-# Access the summary tables for continuous variables and categorical variables
-summary_table_continuous <- summary_tables$cont_summary_df
-summary_table_categorical <- summary_tables$cat_summary_df
 
 
 ##############################################################################################################################
@@ -288,7 +167,7 @@ imputation_function <- function(df, m, ID_val) {
   
   # split df_val data into resect and thoracoscore df_vals
   df_val_resect <- df_val %>% 
-    select(-ASA, -NYHA3or4, -Pneumonectomy, -ComorbidityScore1and2, -ComorbidityScore3andAbove, -Urgency, -DeadatDischarge)
+    select(-ASA3orAbove, -NYHA3or4, -Pneumonectomy, -ComorbidityScore1and2, -ComorbidityScore3andAbove, -Urgency, -DeadatDischarge)
   
   df_val_thoracoscore <- df_val %>% 
     select(-DLCOPredicted, -BMI, -CreatinineumolL, -Anaemia, -Arrhythmia, -Right, -ResectedSegments, -Thoracotomy, -Deadat90days)
@@ -296,7 +175,7 @@ imputation_function <- function(df, m, ID_val) {
   
   # split df_imp data into resect and thoracoscore df_imps
   df_imp_resect <- df_imp %>% 
-    select(-ASA, -NYHA3or4, -Pneumonectomy, -ComorbidityScore1and2, -ComorbidityScore3andAbove, -Urgency, -DeadatDischarge)
+    select(-ASA3orAbove, -NYHA3or4, -Pneumonectomy, -ComorbidityScore1and2, -ComorbidityScore3andAbove, -Urgency, -DeadatDischarge)
   
   df_imp_thoracoscore <- df_imp %>% 
     select(-DLCOPredicted, -BMI, -CreatinineumolL, -Anaemia, -Arrhythmia, -Right, -ResectedSegments, -Thoracotomy, -Deadat90days)
@@ -325,6 +204,8 @@ imputation_function <- function(df, m, ID_val) {
   
   
   return(list(
+    "df_val" = df_val,
+    "df_imp" = df_imp,
     "MI_noY_val_resect" = MI_noY_val_resect,
     "MI_withY_val_resect" = MI_withY_val_resect,
     "MI_noY_imp_resect" = MI_noY_imp_resect, 
@@ -346,6 +227,160 @@ imputation_function <- function(df, m, ID_val) {
 IDs_for_val <- sample(df$ID, nrow(df)/2)
 
 imputed_datasets <- imputation_function(df = df, m = 5, ID_val = IDs_for_val)
+
+
+
+####################
+df_val <- imputed_datasets$df_val
+df_imp <- imputed_datasets$df_imp
+
+########################################################################################################################
+# Table 1 of the Results' section
+
+# Calculate the % of missingness overall in the whole df
+missingness_val <- mean(is.na(df_val)) * 100 
+
+# Count missing values in each variable
+missing_counts <- colSums(is.na(df_val))
+
+# Calculate proportion of missing values in each variable
+missing_prop <- missing_counts / nrow(df_val)
+
+# Convert proportions to percentages
+missing_percent <- missing_prop * 100
+
+# Return results as a data frame
+result_missingness_val <- data.frame(missing_percent = missing_percent)
+
+
+md.pattern(df_val, rotate.names = TRUE)
+
+
+
+###############################################################################
+
+# Calculate the % of missingness overall in the whole df
+missingness_imp <- mean(is.na(df_imp)) * 100 
+
+# Count missing values in each variable
+missing_counts <- colSums(is.na(df_imp))
+
+# Calculate proportion of missing values in each variable
+missing_prop <- missing_counts / nrow(df_imp)
+
+# Convert proportions to percentages
+missing_percent <- missing_prop * 100
+
+# Return results as a data frame
+result_missingness_imp <- data.frame(missing_percent = missing_percent)
+
+
+md.pattern(df_imp, rotate.names = TRUE)
+
+
+
+########################################################################################################################
+#### summary continuous variables ######
+
+summary_stats <- function(df) {
+  # Define continuous variables
+  cont_vars <- c("Age",
+                 "DLCOPredicted",
+                 "BMI",
+                 "CreatinineumolL",
+                 "ResectedSegments",
+                 "PPOFEV1" #
+  )
+  
+  # Define categorical variables
+  cat_vars <- c("MaleSex",
+                "ECOG",
+                "Anaemia",
+                "Arrhythmia",
+                "Right",
+                "Thoracotomy",
+                "Malignant",
+                "Age55to65",
+                "AgeOver65",
+                "ASA3orAbove",
+                "ECOG3orAbove",
+                "NYHA3or4",
+                "Urgency",
+                "Pneumonectomy",
+                "ComorbidityScore1and2",
+                "ComorbidityScore3andAbove",
+                "Deadat90days",
+                "DeadatDischarge",
+                "Diabetes", #
+                "Hypertension", #
+                "Smoking", #
+                "IHD", #
+                "COPD", #
+                "CerebrovascularDisease", #
+                "PVD",
+                "ComplexLobectomy",
+                "ExtendedResection"
+  )
+  
+  
+  
+  ########################################################################################################################
+  
+  # Calculate summary statistics for continuous variables
+  cont_summary <- sapply(df[cont_vars], function(x) c(mean(x, na.rm = TRUE),
+                                                      sd(x, na.rm = TRUE),
+                                                      median(x, na.rm = TRUE),
+                                                      min(x, na.rm = TRUE),
+                                                      max(x, na.rm = TRUE),
+                                                      length(x)))
+  
+  # Calculate percentage of missing values for continuous variables
+  cont_missing_percent <- sapply(df[cont_vars], function(x) round(sum(is.na(x)) / length(x) * 100, 2))
+  
+  # Combine summary statistics and missingness information for continuous variables
+  cont_summary_df <- data.frame(t(cont_summary), missing_percent = cont_missing_percent)
+  colnames(cont_summary_df) <- c("Mean", "SD", "Median", "Min", "Max", "N", "Missing_Percent")
+  rownames(cont_summary_df) <- cont_vars
+  
+  # Convert categorical variables to factors
+  df[cat_vars] <- lapply(df[cat_vars], factor)
+  
+  # Calculate summary statistics for categorical variables
+  cat_summary <- sapply(df[cat_vars], function(x) c(levels(x)[which.max(table(x))],
+                                                    paste(levels(x), collapse = ", "),
+                                                    length(x)))
+  
+  # Calculate percentage of missing values for categorical variables
+  cat_missing_percent <- sapply(df[cat_vars], function(x) round(sum(is.na(x)) / length(x) * 100, 2))
+  
+  # Combine summary statistics and missingness information for categorical variables
+  cat_summary_df <- data.frame(t(cat_summary), missing_percent = cat_missing_percent)
+  colnames(cat_summary_df) <- c("Mode", "Levels", "N", "Missing_Percent")
+  rownames(cat_summary_df) <- cat_vars
+  
+  # Plot bar charts for each categorical variable
+  for (var in cat_vars) {
+    p <- ggplot(data = df, aes_string(x = var)) +
+      geom_bar(stat = "count", fill = "steelblue") +
+      labs(title = var, x = var, y = "Frequency") + 
+      geom_text(stat = "count", aes(label = scales::percent(..count../sum(..count..))),
+                vjust = -0.5, size = 3)
+    print(p)
+  }
+  
+  return(list(cont_summary_df = cont_summary_df, cat_summary_df = cat_summary_df))
+}
+
+# Call the summary_stats function with the resect_df dataframe
+
+summary_tables <- summary_stats(df)
+
+# Access the summary tables for continuous variables and categorical variables
+summary_table_continuous <- summary_tables$cont_summary_df
+summary_table_categorical <- summary_tables$cat_summary_df
+
+
+
 
 
 ########################################################################################################################
@@ -733,6 +768,9 @@ plot_R <- plot_R + theme(panel.grid.major = element_line(size = 1.5))
 print(plot_R)
 
 
+
+
+
 ##############################################################################################################################
 
 T_datasets <- imputed_datasets[grepl("thoracoscore", names(imputed_datasets))]
@@ -749,7 +787,7 @@ for (dataset_name in names(T_datasets)) {
       (as.numeric(datasetT$Age55to65) * 0.7679) + 
       (as.numeric(datasetT$AgeOver65) * 1.0073) + 
       (as.numeric(datasetT$MaleSex) * 0.4505) +
-      (as.numeric(datasetT$ASA) * 0.6057) +
+      (as.numeric(datasetT$ASA3orAbove) * 0.6057) +
       (as.numeric(datasetT$ECOG3orAbove) * 0.689) +
       (as.numeric(datasetT$NYHA3or4) * 0.9075) +
       (as.numeric(datasetT$Urgency) * 0.8443) +
@@ -777,7 +815,7 @@ for (dataset_name in names(T_datasets)) {
       (as.numeric(datasetT$Age55to65) * 0.7679) + 
       (as.numeric(datasetT$AgeOver65) * 1.0073) + 
       (as.numeric(datasetT$MaleSex) * 0.4505) +
-      (as.numeric(datasetT$ASA) * 0.6057) +
+      (as.numeric(datasetT$ASA3orAbove) * 0.6057) +
       (as.numeric(datasetT$ECOG3orAbove) * 0.689) +
       (as.numeric(datasetT$NYHA3or4) * 0.9075) +
       (as.numeric(datasetT$Urgency) * 0.8443) +
@@ -1071,17 +1109,56 @@ all_bias_T <- MInoY_bias_T %>%
 
 all_bias_T$target_measures <- factor(all_bias_T$target_measures, levels = c("AUC", "Calibration Intercept", "Calibration Slope", "Brier Score"))
 
-####
-##### plot "bias" 
-plot_T <- ggplot(data = all_bias_T, aes(x = bias, y = Dataset_val, color = factor(target_measures),
-                                        shape = factor(target_measures))) +
-  geom_errorbar(aes(xmin = LCI_diff, xmax = UCI_diff), width = .1) + ### hashtag needs removing once the UCI and LCI are calculated
+
+##corrected mean
+all_bias_T_filtered <- all_bias_T %>%
+  filter(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + FRA") 
+  ) %>%
+  mutate(difference_identical = estimates - true_estimates) %>%
+  group_by(target_measures) %>%
+  summarise(mean_difference_identical = mean(difference_identical))
+
+
+all_bias_T_joined <- all_bias_T_filtered %>%
+  left_join(all_bias_T,
+            by = "target_measures",
+            multiple = "all") %>%
+  select(target_measures, Dataset_imp, Dataset_val, mean_difference_identical, everything()) %>%
+  mutate(bias_adjusted = ifelse(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + RFA"),
+    bias,  
+    bias + mean_difference_identical  
+  ),
+  LCI_adjusted = ifelse(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + RFA"),
+    LCI_diff, 
+    LCI_diff + mean_difference_identical 
+  ),
+  UCI_adjusted = ifelse(
+    (Dataset_imp == "MI no Y" & Dataset_val == "MI no Y") |
+      (Dataset_imp == "MI with Y" & Dataset_val == "MI with Y") |
+      (Dataset_imp == "Mean + RFA" & Dataset_val == "Mean + RFA"),
+    UCI_diff, 
+    UCI_diff + mean_difference_identical  
+  ))
+
+
+plot_T <- ggplot(data = all_bias_T_joined, aes(x = bias_adjusted, y = Dataset_val, color = factor(target_measures),
+                                               shape = factor(target_measures))) +
+  geom_errorbar(aes(xmin = LCI_adjusted, xmax = UCI_adjusted), width = .1) + ### hashtag needs removing once the UCI and LCI are calculated
   geom_point(size = 3, stroke = 0.5) +
   guides(color = guide_legend(reverse = TRUE)) +
   scale_shape_manual(values = c(8, 17, 16, 15)) +
   scale_color_brewer(palette = "Set1") +
   geom_vline(xintercept = 0, linetype = "dotted") +
-  xlab("Difference in the performance metrics under different combinations of imputation methods") +
+  xlab("Adjusted Difference") +
   ylab("Validation Data Imputation Methods") +
   theme_minimal() +
   theme(
@@ -1095,59 +1172,19 @@ plot_T <- ggplot(data = all_bias_T, aes(x = bias, y = Dataset_val, color = facto
     panel.spacing.x = unit(0.5, "lines")
   ) +
   ggh4x::facet_grid2(target_measures ~ Dataset_imp, scales = "free_x", independent = "x") +
-  scale_x_continuous(limits = function(x) c(-max(abs(x)), max(abs(x)))) +
+  scale_x_continuous(limits = function(x) c(-max(abs(x)), max(abs(x))),
+                     breaks = scales::breaks_pretty(n = 3)) +  # set limits to center zero
   theme(
     panel.border = element_rect(color = "black", fill = NA, size = 1.5),
     strip.text = element_text(size = 14, hjust = 0.5),
     strip.placement = "outside"
   ) +
-  ggtitle("Missingness mechanisms at model implementation") +
+  ggtitle("Deployment Data Imputation Methods") +
   theme(plot.title = element_text(face = "bold", size = 16, hjust = 0.5))
 
 plot_T <- plot_T + theme(panel.grid.major = element_line(size = 1.5))
 
 print(plot_T)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+setwd("/Users/user/AntoniaPhD/00. Thesis/thesis_new/Chapter 4 figures")
+ggsave("Thoracoscore_bias.png", units="in", width=11, height=10, dpi=300)
